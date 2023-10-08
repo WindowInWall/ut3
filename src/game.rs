@@ -1,8 +1,9 @@
 use derive_more::{Deref, DerefMut};
+use bincode::{Encode, Decode};
 
-pub use super::game_error::GameError;
+use crate::messages::BoardPos;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub enum Player {
     Ex,
     Oh,
@@ -33,6 +34,15 @@ trait TTTSquare {
 #[derive(Copy, Clone, Deref, DerefMut)]
 struct Board<T: TTTSquare> ([[T; 3]; 3]);
 
+static WIN_CONFIGS: [[usize; 3]; 8] = [ [0, 1, 2],   // row 1
+                                        [3, 4, 5],   // row 2
+                                        [6, 7, 8],   // row 3
+                                        [0, 3, 6],   // col 1
+                                        [1, 4, 7],   // col 2
+                                        [2, 5, 8],   // col 3
+                                        [0, 4, 8],   // diag 1
+                                        [2, 4, 6] ]; // diag 2
+
 // Contains logic for obtaining the current state of a Tic-tac-toe-like game.
 // Since it's generic over TTTSquares, we can use it both for regular Tic-tac-toe
 // boards and Ultimate-tic-tac-toe boards
@@ -50,39 +60,13 @@ impl<S: TTTSquare> Board<S> {
     }
 
     fn won_by(&self, player: Player) -> bool {
-        // checking rows
-        for i in 0..3 {
-            let mut won_row = true;
-            for j in 0..3 {
-                won_row &= self[i][j].state() == SquareState::Marked(player);
-            }
-            if won_row {
-                return true;
-            }
-        }
-
-        // checking cols
-        for i in 0..3 {
-            let mut won_col = true;
-            for j in 0..3 {
-                won_col &= self[j][i].state() == SquareState::Marked(player);
-            }
-            if won_col {
-                return true;
-            }
-        }
-
-        // checking diag
-        let is_diag_won  = (0..3).all(|idx| 
-            self[idx][idx].state() == SquareState::Marked(player)
-        );
-            
-        // checking anti-diag
-        let is_antidiag_won  = (0..3).all(|idx| 
-            self[idx][2 - idx].state() == SquareState::Marked(player)
-        );
-
-        is_diag_won || is_antidiag_won
+        WIN_CONFIGS
+            .iter()
+            .any(|x| x.iter().all(|idx| {
+                let row = idx / 3;
+                let col = idx % 3;
+                self[row][col].state() == SquareState::Marked(player)
+            }))
     }
 
     fn is_full(&self) -> bool {
@@ -118,6 +102,20 @@ impl TicTacToe {
         TicTacToe {
             board: Board([[None; 3]; 3]),
             game_state: GameState::Ongoing,
+        }
+    }
+
+    fn move_is_valid(&self, idx: usize) -> bool {
+        if self.game_state != GameState::Ongoing || idx >= 9 {
+            return false;
+        }
+
+        let row = idx / 3;
+        let col = idx % 3;
+
+        match self.board[row][col] {
+            Some(_) => false,
+            None => true,
         }
     }
 
@@ -158,21 +156,17 @@ pub struct UltimateTicTacToe {
     pub game_state: GameState,
 }
 
-// in the range of 1..=9
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum BoardPos {
-    WithFocus(usize, usize),
-    WithoutFocus(usize),
+pub enum GameError {
+    // we needed the other input
+    IncorrectInputVariant,
+    // indices are invalid
+    IllegalIndex,
+    SquareNotOpen,
+    SquareNotEmpty(Player),
+    GameOver,
 }
 
-impl BoardPos {
-    fn is_illegal(&self) -> bool {
-        match *self {
-            BoardPos::WithFocus(f, s) => f == 0 || f > 9 || s == 0 || s > 9,
-            BoardPos::WithoutFocus(s) => s == 0 || s > 9,
-        }
-    }
-}
 
 impl std::default::Default for UltimateTicTacToe {
     fn default() -> Self {
@@ -200,6 +194,20 @@ impl UltimateTicTacToe {
             (None,    BoardPos::WithFocus(f, i)) => Ok((f - 1, i - 1)),
             _ => Err(GameError::IncorrectInputVariant),
         }
+    }
+
+    pub fn move_is_valid(&self, pos: BoardPos) -> bool {
+        if self.game_state != GameState::Ongoing || pos.is_illegal() {
+            return false;
+        }
+
+        let (focus, square) = match self.loc_from(pos) {
+            Ok(e) => e,
+            _ => return false,
+        };
+        let sub_ttt = &self.board[focus / 3][focus % 3];
+
+        sub_ttt.move_is_valid(square)
     }
 
     pub fn place(&mut self, player: Player, pos: BoardPos) -> Result<(), GameError> {

@@ -1,4 +1,4 @@
 mod game;
-mod game_error;
+mod messages;
 pub mod client;
 pub mod server;
