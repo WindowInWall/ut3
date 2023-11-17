@@ -32,7 +32,7 @@ trait TTTSquare {
 }
 
 #[derive(Copy, Clone, Deref, DerefMut)]
-struct Board<T: TTTSquare> ([[T; 3]; 3]);
+struct Board<T: TTTSquare> ([T; 9]);
 
 static WIN_CONFIGS: [[usize; 3]; 8] = [ [0, 1, 2],   // row 1
                                         [3, 4, 5],   // row 2
@@ -62,16 +62,13 @@ impl<S: TTTSquare> Board<S> {
     fn won_by(&self, player: Player) -> bool {
         WIN_CONFIGS
             .iter()
-            .any(|x| x.iter().all(|idx| {
-                let row = idx / 3;
-                let col = idx % 3;
-                self[row][col].state() == SquareState::Marked(player)
-            }))
+            .any(|x| x.iter().all(|&idx|
+                self[idx].state() == SquareState::Marked(player)
+            ))
     }
 
     fn is_full(&self) -> bool {
         self.iter()
-            .flatten()
             .all(|square| square.state() != SquareState::Empty)
     }
 }
@@ -100,7 +97,7 @@ enum TTTError {
 impl TicTacToe {
     fn new() -> Self {
         TicTacToe {
-            board: Board([[None; 3]; 3]),
+            board: Board([None; 9]),
             game_state: GameState::Ongoing,
         }
     }
@@ -110,10 +107,7 @@ impl TicTacToe {
             return false;
         }
 
-        let row = idx / 3;
-        let col = idx % 3;
-
-        match self.board[row][col] {
+        match self.board[idx] {
             Some(_) => false,
             None => true,
         }
@@ -126,13 +120,10 @@ impl TicTacToe {
             return Err(TTTError::InvalidIndex);
         }
 
-        let row = idx / 3;
-        let col = idx % 3;
-
-        if let Some(resident) = self.board[row][col] {
+        if let Some(resident) = self.board[idx] {
             Err(TTTError::NonEmptySquare(resident))
         } else {
-            self.board[row][col] = Some(player);
+            self.board[idx] = Some(player);
             // updating the game state
             self.game_state = self.board.eval();
             Ok(())
@@ -171,7 +162,7 @@ pub enum GameError {
 impl std::default::Default for UltimateTicTacToe {
     fn default() -> Self {
         UltimateTicTacToe {
-            board: Board([[TicTacToe::new(); 3]; 3]),
+            board: Board([TicTacToe::new(); 9]),
             focus: None,
             game_state: GameState::Ongoing,
         }
@@ -179,13 +170,7 @@ impl std::default::Default for UltimateTicTacToe {
 }
 
 impl UltimateTicTacToe {
-    pub fn new() -> Self {
-        UltimateTicTacToe {
-            board: Board([[TicTacToe::new(); 3]; 3]),
-            focus: None,
-            game_state: GameState::Ongoing,
-        }
-    }
+    pub fn new() -> Self { UltimateTicTacToe::default() }
 
     fn loc_from(&self, pos: BoardPos) -> Result<(usize, usize), GameError> {
         // converting from 1-based indexing to 0-based as well
@@ -205,9 +190,8 @@ impl UltimateTicTacToe {
             Ok(e) => e,
             _ => return false,
         };
-        let sub_ttt = &self.board[focus / 3][focus % 3];
 
-        sub_ttt.move_is_valid(square)
+        self.board[focus].move_is_valid(square)
     }
 
     pub fn place(&mut self, player: Player, pos: BoardPos) -> Result<(), GameError> {
@@ -217,18 +201,16 @@ impl UltimateTicTacToe {
             return Err(GameError::IllegalIndex);
         }
 
-        let (focus, square) = self.loc_from(pos)?;
-        let sub_ttt = &mut self.board[focus / 3][focus % 3];
+        let (macrosquare, microsquare) = self.loc_from(pos)?;
 
-        match sub_ttt.place(player, square) {
+        match self.board[macrosquare].place(player, microsquare) {
             Err(TTTError::NonEmptySquare(p)) => Err(GameError::SquareNotEmpty(p)),
             Err(TTTError::GameOver) => Err(GameError::SquareNotOpen),
             Err(TTTError::InvalidIndex) => Err(GameError::IllegalIndex),
             Ok(()) => {
                 self.game_state = self.board.eval();
-                let next = self.board[square / 3][square % 3];
-                self.focus = if next.state() == SquareState::Empty {
-                    Some(square)
+                self.focus = if self.board[microsquare].state() == SquareState::Empty {
+                    Some(microsquare)
                 } else {
                     None
                 };
@@ -261,7 +243,7 @@ impl TicTacToe {
     pub fn get_line(&self, idx: usize) -> String {
         assert!(idx < 3);
 
-        self.board[idx]
+        self.board
             .iter()
             .map(|e| 
                 if let Some(p) = e {
@@ -281,7 +263,7 @@ impl UltimateTicTacToe {
         for row_idx in 0..3 {
             for line_idx in 0..3 {
                 for col_idx in 0..3 {
-                    let game = &self.board[row_idx][col_idx];
+                    let game = &self.board[3 * row_idx + col_idx];
                     display.push_str(&game.get_line(line_idx));
                     
                     if col_idx != 2 {
