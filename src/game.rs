@@ -240,10 +240,11 @@ impl fmt::Display for Player {
 }
 
 impl TicTacToe {
-    pub fn get_line(&self, idx: usize) -> String {
-        assert!(idx < 3);
+    pub fn get_line(&self, line_idx: usize) -> String {
+        assert!(line_idx < 3);
 
-        self.board
+        let board_idx = 3 * line_idx;
+        self.board[board_idx..(board_idx + 3)]
             .iter()
             .map(|e| 
                 if let Some(p) = e {
