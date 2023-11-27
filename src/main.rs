@@ -10,7 +10,7 @@ struct Flags {
     #[clap(long = "server")]
     server: bool,
 
-    #[clap(short = 'p', long = "port", default_value = "3333")]
+    #[clap(long = "port", default_value = "3333")]
     port: String,
 
     #[clap(long="ip", default_value="localhost")]
