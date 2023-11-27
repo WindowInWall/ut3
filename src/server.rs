@@ -1,5 +1,5 @@
 use crate::game::{Player, UltimateTicTacToe, GameState};
-use crate::messages::{GameUpdate};
+use crate::messages::GameUpdate;
 
 use std::io::{self, Error, ErrorKind};
 use std::net::{TcpListener, TcpStream};
